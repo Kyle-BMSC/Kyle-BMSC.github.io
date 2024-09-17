@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TreeHut Packaging Development Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; box-sizing: border-box; }
+        input, select { margin: 5px 0; width: 100%; padding: 5px; }
+        button { margin: 10px 0; padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
+        th { background-color: #f2f2f2; }
+        .section { margin-top: 30px; }
+        #visualizationContainer { display: flex; overflow-x: auto; margin-top: 20px; }
+        .bottleVisualization { width: 120px; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <h1>TreeHut Packaging Development Calculator</h1>
+    
+    <div class="section">
+        <h2>Input Parameters</h2>
+        <label for="outerDiameter">Outer Diameter (mm):</label>
+        <input type="number" id="outerDiameter" value="60" step="0.1">
+        
+        <label for="height">Height (mm):</label>
+        <input type="number" id="height" value="120" step="0.1">
+        
+        <label for="wallThickness">Wall Thickness (mm):</label>
+        <input type="number" id="wallThickness" value="0.5" step="0.1">
+        
+        <label for="material">Material:</label>
+        <select id="material">
+            <option value="PET">PET</option>
+            <option value="HDPE">HDPE</option>
+            <option value="PP">PP</option>
+        </select>
+        
+        <label for="closureType">Closure Type:</label>
+        <select id="closureType">
+            <option value="screw">Screw Cap</option>
+            <option value="snap">Snap Cap</option>
+            <option value="pump">Pump</option>
+        </select>
+        
+        <label for="targetVolume">Target Volume (ml):</label>
+        <input type="number" id="targetVolume" value="500" step="1">
+        
+        <label for="diameterIncrements">Diameter Increments (comma-separated mm):</label>
+        <input type="text" id="diameterIncrements" value="0.5,1.0,1.5,2.0,2.5,3.0">
+        
+        <label for="heightIncrements">Height Increments (comma-separated mm):</label>
+        <input type="text" id="heightIncrements" value="10,20,30,40,50,60">
+        
+        <button onclick="calculateAll()">Calculate</button>
+    </div>
+
+    <div id="results" class="section">
+        <!-- Results will be inserted here -->
+    </div>
+
+    <div id="visualizationContainer" class="section">
+        <!-- Bottle visualizations will be inserted here -->
+    </div>
+
+    <script>
+        function calculateAll() {
+            const outerDiameter = parseFloat(document.getElementById('outerDiameter').value);
+            const height = parseFloat(document.getElementById('height').value);
+            const wallThickness = parseFloat(document.getElementById('wallThickness').value);
+            const material = document.getElementById('material').value;
+            const closureType = document.getElementById('closureType').value;
+            const targetVolume = parseFloat(document.getElementById('targetVolume').value);
+            const diameterIncrements = document.getElementById('diameterIncrements').value.split(',').map(x => parseFloat(x.trim()));
+            const heightIncrements = document.getElementById('heightIncrements').value.split(',').map(x => parseFloat(x.trim()));
+
+            const innerDiameter = outerDiameter - 2 * wallThickness;
+            const currentVolume = calculateVolume(innerDiameter, height);
+
+            let resultsHtml = `
+                <h2>Current Bottle Metrics</h2>
+                <table>
+                    <tr><th>Metric</th><th>Value</th></tr>
+                    <tr><td>Inner Diameter</td><td>${innerDiameter.toFixed(2)} mm</td></tr>
+                    <tr><td>Current Volume</td><td>${currentVolume.toFixed(2)} ml</td></tr>
+                    <tr><td>Surface Area</td><td>${calculateSurfaceArea(outerDiameter, height).toFixed(2)} cm²</td></tr>
+                    <tr><td>Estimated Weight</td><td>${estimateMaterialWeight(calculateSurfaceArea(outerDiameter, height), wallThickness, material).toFixed(2)} g</td></tr>
+                    <tr><td>Stability Ratio (H/D)</td><td>${calculateStabilityRatio(height, outerDiameter).toFixed(2)}</td></tr>
+                    <tr><td>Pallet Efficiency</td><td>${calculatePalletEfficiency(outerDiameter)} units per layer</td></tr>
+                    <tr><td>Thermal Efficiency (SA/V)</td><td>${calculateThermalEfficiency(calculateSurfaceArea(outerDiameter, height), currentVolume).toFixed(4)} cm²/ml</td></tr>
+                </table>
+
+                <h2>Volume Changes - Diameter Only</h2>
+                <table>
+                    <tr><th>New Outer Diameter (mm)</th><th>New Inner Diameter (mm)</th><th>Volume (ml)</th><th>Volume Increase (ml)</th></tr>
+            `;
+
+            diameterIncrements.forEach(increase => {
+                const newOuterDiameter = outerDiameter + increase;
+                const newInnerDiameter = newOuterDiameter - 2 * wallThickness;
+                const newVolume = calculateVolume(newInnerDiameter, height);
+                resultsHtml += `<tr>
+                    <td>${newOuterDiameter.toFixed(2)}</td>
+                    <td>${newInnerDiameter.toFixed(2)}</td>
+                    <td>${newVolume.toFixed(2)}</td>
+                    <td>${(newVolume - currentVolume).toFixed(2)}</td>
+                </tr>`;
+            });
+
+            resultsHtml += `</table>
+                <h2>Volume Changes - Height Only</h2>
+                <table>
+                    <tr><th>New Height (mm)</th><th>Volume (ml)</th><th>Volume Increase (ml)</th></tr>
+            `;
+
+            heightIncrements.forEach(increase => {
+                const newHeight = height + increase;
+                const newVolume = calculateVolume(innerDiameter, newHeight);
+                resultsHtml += `<tr>
+                    <td>${newHeight.toFixed(2)}</td>
+                    <td>${newVolume.toFixed(2)}</td>
+                    <td>${(newVolume - currentVolume).toFixed(2)}</td>
+                </tr>`;
+            });
+
+            resultsHtml += `</table>
+                <h2>Changes to Reach Target Volume (${targetVolume} ml)</h2>
+                <table>
+                    <tr><th>Diameter Increase (mm)</th><th>New Outer Diameter (mm)</th><th>New Height (mm)</th><th>Height Increase (mm)</th></tr>
+            `;
+
+            let visualizationHtml = createBottleVisualization(outerDiameter, height, 'red', 'Current');
+            let maxHeight = height;
+            let maxDiameter = outerDiameter;
+
+            diameterIncrements.forEach(increase => {
+                const newOuterDiameter = outerDiameter + increase;
+                const newInnerDiameter = newOuterDiameter - 2 * wallThickness;
+                const newHeight = calculateNewHeight(newInnerDiameter, targetVolume);
+                const heightIncrease = newHeight - height;
+
+                maxHeight = Math.max(maxHeight, newHeight);
+                maxDiameter = Math.max(maxDiameter, newOuterDiameter);
+
+                resultsHtml += `<tr>
+                    <td>${increase.toFixed(2)}</td>
+                    <td>${newOuterDiameter.toFixed(2)}</td>
+                    <td>${newHeight.toFixed(2)}</td>
+                    <td>${heightIncrease.toFixed(2)}</td>
+                </tr>`;
+
+                visualizationHtml += createBottleVisualization(newOuterDiameter, newHeight, 'blue', `+${increase}mm`, maxHeight, maxDiameter);
+            });
+
+            resultsHtml += '</table>';
+            document.getElementById('results').innerHTML = resultsHtml;
+            document.getElementById('visualizationContainer').innerHTML = visualizationHtml;
+        }
+
+        function calculateVolume(innerDiameter, height) {
+            return Math.PI * Math.pow(innerDiameter / 2, 2) * height / 1000;
+        }
+
+        function calculateNewHeight(innerDiameter, targetVolume) {
+            return (targetVolume * 1000) / (Math.PI * Math.pow(innerDiameter / 2, 2));
+        }
+
+        function calculateSurfaceArea(diameter, height) {
+            const radius = diameter / 2;
+            return 2 * Math.PI * radius * (radius + height) / 100;
+        }
+
+        function estimateMaterialWeight(surfaceArea, thickness, material) {
+            const densities = { 'PET': 1.38, 'HDPE': 0.97, 'PP': 0.90 };
+            return surfaceArea * thickness * densities[material];
+        }
+
+        function calculateStabilityRatio(height, diameter) {
+            return height / diameter;
+        }
+
+        function calculatePalletEfficiency(diameter) {
+            const palletWidth = 1000; // mm
+            const palletLength = 1200; // mm
+            const unitsPerRow = Math.floor(palletWidth / diameter);
+            const rowsPerLayer = Math.floor(palletLength / diameter);
+            return unitsPerRow * rowsPerLayer;
+        }
+
+        function calculateThermalEfficiency(surfaceArea, volume) {
+            return surfaceArea / volume;
+        }
+
+        function createBottleVisualization(diameter, height, color, label, maxHeight = height, maxDiameter = diameter) {
+            const svgHeight = 220;
+            const svgWidth = 120;
+            const marginTop = 20;
+            const marginBottom = 40;
+            const availableHeight = svgHeight - marginTop - marginBottom;
+
+            const scaledWidth = (diameter / maxDiameter) * 80;
+            const scaledHeight = (height / maxHeight) * availableHeight;
+            const xOffset = (svgWidth - scaledWidth) / 2;
+            const yOffset = svgHeight - marginBottom - scaledHeight;
+
+            return `
+                <div class="bottleVisualization">
+                    <svg viewBox="0 0 ${svgWidth} ${svgHeight}">
+                        <rect x="${xOffset}" y="${yOffset}" width="${scaledWidth}" height="${scaledHeight}" fill="lightblue" stroke="${color}" stroke-width="2"/>
+                        <path d="M${xOffset} ${yOffset} Q${svgWidth/2} ${yOffset-10} ${xOffset + scaledWidth} ${yOffset}" fill="lightblue" stroke="${color}" stroke-width="2"/>
+                        <text x="${svgWidth/2}" y="${svgHeight - 5}" text-anchor="middle" font-size="10">${label}</text>
+                        <text x="${xOffset - 5}" y="${yOffset + scaledHeight/2}" text-anchor="end" font-size="8" transform="rotate(-90 ${xOffset - 5} ${yOffset + scaledHeight/2})">${height.toFixed(1)}mm</text>
+                        <text x="${svgWidth/2}" y="${svgHeight - marginBottom + 15}" text-anchor="middle" font-size="8">${diameter.toFixed(1)}mm</text>
+                    </svg>
+                </div>
+            `;
+        }
+
+        // Initial calculation on page load
+        document.addEventListener('DOMContentLoaded', calculateAll);
+    </script>
+</body>
+</html>
